@@ -153,10 +153,24 @@ const server = http.createServer(async (req, res) => {
     const pathname = new URL(req.url, "http://localhost").pathname;
 
     if (pathname === "/" || pathname === "") {
-      res.writeHead(200, { "Content-Type": "text/plain", ...CORS });
-      return res.end(
-        `${ADDON_NAME}\n\nInstall URL: <this-domain>/manifest.json\nUpstreams configured: ${UPSTREAM_MANIFESTS.length}`
-      );
+      const upstreams = await loadUpstreams();
+      let total = 0;
+      let out = `${ADDON_NAME}\n\nInstall URL: <this-domain>/manifest.json\n`;
+      upstreams.forEach((up, i) => {
+        if (!up) {
+          out += `\n[u${i}] FAILED TO LOAD: ${UPSTREAM_MANIFESTS[i]}\n`;
+          return;
+        }
+        const cats = up.manifest.catalogs || [];
+        total += cats.length;
+        out += `\n[u${i}] ${up.manifest.name || "Unnamed addon"} — ${cats.length} catalog${cats.length === 1 ? "" : "s"}\n`;
+        for (const c of cats) {
+          out += `   • ${c.type} / ${c.name || c.id}\n`;
+        }
+      });
+      out += `\nTotal: ${total} catalogs from ${upstreams.filter(Boolean).length} of ${UPSTREAM_MANIFESTS.length} addons\n`;
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...CORS });
+      return res.end(out);
     }
 
     if (pathname === "/manifest.json") return await handleManifest(res);
