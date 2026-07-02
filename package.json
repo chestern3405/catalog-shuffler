@@ -1,0 +1,12 @@
+{
+  "name": "catalog-shuffler",
+  "version": "1.0.0",
+  "description": "Proxy addon that aggregates catalogs from other addons and shuffles their order",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
