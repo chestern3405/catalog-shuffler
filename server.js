@@ -25,7 +25,7 @@ const SHUFFLE_ITEMS = true;
 // Catalogs to leave in their original order (case-insensitive match against
 // the catalog's name or id). Useful for ranked/chronological rows.
 const SHUFFLE_EXCLUDE = [
-  // "trending",
+   "latest",
   // "new releases",
   // "top this week",
 ];
