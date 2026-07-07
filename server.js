@@ -26,8 +26,8 @@ const SHUFFLE_ITEMS = true;
 // the catalog's name or id). Useful for ranked/chronological rows.
 const SHUFFLE_EXCLUDE = [
    "latest",
-  // "new releases",
-  // "top this week",
+  "because",
+  "for you",
 ];
 
 // ---------------------------------------------------------------------------
