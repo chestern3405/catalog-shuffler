@@ -186,6 +186,10 @@ async function handleManifest(res) {
       name: SHUFFLE_ROW_NAME,
       extra: [{ name: "search", isRequired: false }],
       extraSupported: ["search"],
+      // Keep the row out of the home screen — it's reachable from the
+      // catalog/collection view and via search. If your client ignores
+      // this hint, hide the row in the client's own catalog settings.
+      behaviorHints: { hideOnHome: true },
     });
   }
   const catalogs = shuffle(allCatalogs);
@@ -226,6 +230,19 @@ function isShuffleExcluded(up, type, rawOriginalId) {
 
 // --- Shuffle Shows ---------------------------------------------------------
 
+// Cinemeta hands out metahub image URLs at modest sizes — posters at
+// /small/ and backgrounds at /medium/ — which look soft and blocky on a
+// TV. Metahub serves the same images at larger sizes, so bump the size
+// segment. Non-metahub URLs (e.g. the "All" artwork) pass through as-is.
+function bigImage(url, kind) {
+  if (typeof url !== "string") return url;
+  const want = kind === "background" ? "large" : "medium";
+  return url.replace(
+    /^(https?:\/\/images\.metahub\.space\/(?:background|poster|logo)\/)[^/]+\//,
+    `$1${want}/`
+  );
+}
+
 // In-memory cache of Cinemeta series metadata, keyed by IMDb id
 const _showCache = new Map();
 
@@ -240,8 +257,12 @@ async function getShowMeta(imdbId) {
     if (!res.ok) throw new Error(`Cinemeta ${imdbId} -> HTTP ${res.status}`);
     const data = await res.json();
     if (!data || !data.meta) throw new Error(`Cinemeta ${imdbId} -> no meta`);
-    _showCache.set(imdbId, { at: now, meta: data.meta });
-    return data.meta;
+    const meta = data.meta;
+    meta.poster = bigImage(meta.poster, "poster");
+    meta.background = bigImage(meta.background, "background");
+    meta.logo = bigImage(meta.logo, "logo");
+    _showCache.set(imdbId, { at: now, meta });
+    return meta;
   } catch (err) {
     console.error(String(err));
     return hit ? hit.meta : null; // serve a stale copy over nothing
@@ -353,7 +374,7 @@ async function handleShuffleSearch(res, q) {
       id: `shf~${m.id}`,
       type: "series",
       name: `🎲 ${m.name}`,
-      poster: m.poster || undefined,
+      poster: bigImage(m.poster, "poster") || undefined,
       posterShape: "poster",
       description:
         "Open to add this show to your 🎲 Shuffle row and play random episodes.",
@@ -636,7 +657,7 @@ async function handleApi(req, res, url, pathname) {
         .map((m) => ({
           id: m.id,
           name: m.name,
-          poster: m.poster || null,
+          poster: bigImage(m.poster, "poster") || null,
           releaseInfo: m.releaseInfo || "",
         }));
       return sendApi(res, 200, { ok: true, results });
