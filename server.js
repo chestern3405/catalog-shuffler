@@ -59,8 +59,13 @@ const SHUFFLE_SHOWS = [
 
 const SHUFFLE_ROW_NAME = "🎲 Shuffle";      // home-screen row title
 const SHUFFLE_CATALOG_ID = "shuffle-shows"; // internal catalog id
-const SHUFFLE_EPISODE_COUNT = 10;           // episodes per visit
+const SHUFFLE_EPISODE_COUNT = 20;           // episodes per visit
 const SHUFFLE_INCLUDE_SPECIALS = false;     // include Season 0?
+
+// In-app adding: the 🎲 row is searchable, so searching inside Nuvio also
+// surfaces "🎲 <show>" results — opening one adds it to your list (up to
+// the cap below). Remove shows from the /config page.
+const SHUFFLE_MAX_SHOWS = 50;
 
 // Episode lists come from Cinemeta (Stremio's public metadata addon)
 const CINEMETA_BASE = "https://v3-cinemeta.strem.io";
@@ -177,6 +182,8 @@ async function handleManifest(res) {
       type: "series",
       id: SHUFFLE_CATALOG_ID,
       name: SHUFFLE_ROW_NAME,
+      extra: [{ name: "search", isRequired: false }],
+      extraSupported: ["search"],
     });
   }
   const catalogs = shuffle(allCatalogs);
@@ -186,7 +193,7 @@ async function handleManifest(res) {
     res,
     {
       id: ADDON_ID,
-      version: "1.2.0",
+      version: "1.3.0",
       name: ADDON_NAME,
       description:
         "Aggregates catalogs from your other addons and serves them in a random order on every manifest fetch.",
@@ -254,37 +261,198 @@ function eligibleEpisodes(meta) {
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// The "🎲 Shuffle" row: one entry per configured show
+// The "🎲 Shuffle" row: "All" first, then one entry per configured show.
+// Also answers search requests (see handleShuffleSearch) so shows can be
+// added from inside Nuvio.
 async function handleShuffleCatalog(res, rawExtra) {
-  const skip = rawExtra && rawExtra.match(/skip=(\d+)/);
+  const extra = rawExtra || "";
+  const skip = extra.match(/(?:^|&)skip=(\d+)/);
   if (skip && Number(skip[1]) > 0) return sendJson(res, { metas: [] });
 
+  const searchMatch = extra.match(/(?:^|&)search=([^&]+)/);
+  if (searchMatch) {
+    let q = searchMatch[1];
+    try {
+      q = decodeURIComponent(q);
+    } catch {}
+    return handleShuffleSearch(res, q.replace(/\+/g, " ").trim());
+  }
+
   const shows = await getShuffleShows();
-  const metas = await Promise.all(
-    shows.map(async (s) => {
-      const meta = await getShowMeta(s.id);
-      return {
-        id: `shf~${s.id}`,
-        type: "series",
-        name: meta ? meta.name : s.name || s.id,
-        poster: meta ? meta.poster : undefined,
-        posterShape: "poster",
-        description: meta
-          ? `Random episodes of ${meta.name} — reshuffles every visit.`
-          : `Could not load ${s.id} from Cinemeta (check the IMDb id).`,
-      };
-    })
-  );
+  const showMetas = await Promise.all(shows.map((s) => getShowMeta(s.id)));
+
+  const metas = shows.map((s, i) => {
+    const meta = showMetas[i];
+    return {
+      id: `shf~${s.id}`,
+      type: "series",
+      name: meta ? meta.name : s.name || s.id,
+      poster: meta ? meta.poster : undefined,
+      posterShape: "poster",
+      description: meta
+        ? `Random episodes of ${meta.name} — reshuffles every visit.`
+        : `Could not load ${s.id} from Cinemeta (check the IMDb id).`,
+    };
+  });
+
+  if (shows.length) {
+    const posters = showMetas
+      .filter(Boolean)
+      .map((m) => m.poster)
+      .filter(Boolean);
+    metas.unshift({
+      id: "shf~all",
+      type: "series",
+      name: "All",
+      poster: posters.length
+        ? posters[Math.floor(Math.random() * posters.length)]
+        : undefined,
+      posterShape: "poster",
+      description:
+        "Random episodes from every show in this row — reshuffles every visit.",
+    });
+  }
 
   sendJson(res, { metas }, { "Cache-Control": "no-store, max-age=0" });
+}
+
+// Shows recently returned by an in-app 🎲 search — opening one of these is
+// the signal to add it to the list (see handleShuffleMeta). Keeping this
+// window means stale entries (e.g. Continue Watching items for a removed
+// show) never re-add themselves.
+const _recentSearches = new Map(); // imdbId -> timestamp
+const SEARCH_ADD_WINDOW_MS = 15 * 60 * 1000;
+
+function noteSearched(ids) {
+  const now = Date.now();
+  for (const id of ids) _recentSearches.set(id, now);
+  if (_recentSearches.size > 500) {
+    for (const [id, t] of _recentSearches) {
+      if (now - t > SEARCH_ADD_WINDOW_MS) _recentSearches.delete(id);
+    }
+  }
+}
+
+function wasRecentlySearched(id) {
+  const t = _recentSearches.get(id);
+  return Boolean(t && Date.now() - t < SEARCH_ADD_WINDOW_MS);
+}
+
+// In-app search results: 🎲-prefixed versions of Cinemeta's matches.
+// Opening one adds the show to the list and starts shuffling it.
+async function handleShuffleSearch(res, q) {
+  if (q.length < 2) return sendJson(res, { metas: [] });
+  try {
+    const r = await fetch(
+      `${CINEMETA_BASE}/catalog/series/top/search=${encodeURIComponent(q)}.json`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!r.ok) throw new Error(`Cinemeta search -> HTTP ${r.status}`);
+    const data = await r.json();
+    const found = (data.metas || [])
+      .filter((m) => m && /^tt\d+$/.test(m.id))
+      .slice(0, 10);
+    noteSearched(found.map((m) => m.id));
+    const metas = found.map((m) => ({
+      id: `shf~${m.id}`,
+      type: "series",
+      name: `🎲 ${m.name}`,
+      poster: m.poster || undefined,
+      posterShape: "poster",
+      description:
+        "Open to add this show to your 🎲 Shuffle row and play random episodes.",
+    }));
+    sendJson(res, { metas }, { "Cache-Control": "no-store, max-age=0" });
+  } catch (err) {
+    console.error(String(err));
+    sendJson(res, { metas: [] });
+  }
+}
+
+// "All": one shuffled batch drawn evenly across every show in the list, so
+// Auto-Play Next channel-surfs between shows.
+async function handleAllShuffleMeta(res) {
+  const shows = await getShuffleShows();
+  const showMetas = await Promise.all(shows.map((s) => getShowMeta(s.id)));
+
+  const decks = [];
+  showMetas.forEach((meta) => {
+    if (!meta) return;
+    const eps = shuffle(eligibleEpisodes(meta));
+    if (eps.length) {
+      decks.push({
+        name: meta.name,
+        poster: meta.poster,
+        background: meta.background,
+        eps,
+      });
+    }
+  });
+  if (!decks.length) return sendJson(res, { meta: null });
+
+  const picked = [];
+  while (picked.length < SHUFFLE_EPISODE_COUNT) {
+    const withLeft = decks.filter((d) => d.eps.length);
+    if (!withLeft.length) break;
+    const deck = withLeft[Math.floor(Math.random() * withLeft.length)];
+    picked.push({ show: deck.name, v: deck.eps.pop() });
+  }
+
+  const videos = picked.map((p, i) => ({
+    id: p.v.id,
+    title: `${p.show} · S${pad2(p.v.season)}E${pad2(p.v.episode ?? p.v.number)} · ${
+      p.v.title || p.v.name || "Episode"
+    }`,
+    season: 1,
+    episode: i + 1,
+    number: i + 1,
+    released: p.v.released,
+    thumbnail: p.v.thumbnail,
+    overview: p.v.overview || p.v.description,
+  }));
+
+  const cover = decks[Math.floor(Math.random() * decks.length)];
+  sendJson(
+    res,
+    {
+      meta: {
+        id: "shf~all",
+        type: "series",
+        name: "All · Shuffle",
+        poster: cover.poster,
+        background: cover.background,
+        description: `${videos.length} random episodes drawn from all ${decks.length} of your shuffle shows. Back out and reopen to reshuffle. Turn on Auto-Play Next and let it run.`,
+        videos,
+      },
+    },
+    { "Cache-Control": "no-store, max-age=0" }
+  );
 }
 
 // A shuffled batch of real episodes, renumbered 1..N so the list order IS
 // the play order — Auto-Play Next just walks down the random list. Each
 // video keeps its real id (tt…:s:e) so stream addons resolve it normally.
 async function handleShuffleMeta(res, imdbId) {
+  if (imdbId === "all") return handleAllShuffleMeta(res);
+
   const src = await getShowMeta(imdbId);
   if (!src) return sendJson(res, { meta: null });
+
+  // In-app add: opening a 🎲 search result lands here with a show that may
+  // not be in the list yet — persist it (bounded; failures are non-fatal).
+  if (storageConfigured() && wasRecentlySearched(imdbId)) {
+    try {
+      const shows = await getShuffleShows();
+      if (
+        !shows.some((s) => s.id === imdbId) &&
+        shows.length < SHUFFLE_MAX_SHOWS
+      ) {
+        await mutateShows("add", imdbId, src.name);
+      }
+    } catch (err) {
+      console.error(String(err));
+    }
+  }
 
   const picked = shuffle(eligibleEpisodes(src)).slice(0, SHUFFLE_EPISODE_COUNT);
 
@@ -363,7 +531,7 @@ async function writeShowsFile(list, sha) {
     JSON.stringify({ shows: list }, null, 2) + "\n"
   ).toString("base64");
   const body = {
-    message: "Update shuffle shows via config page [skip render]",
+    message: "Update shuffle shows [skip render]",
     content,
     branch: GITHUB_BRANCH,
   };
