@@ -59,6 +59,8 @@ const SHUFFLE_SHOWS = [
 
 const SHUFFLE_ROW_NAME = "🎲 Shuffle";      // home-screen row title
 const SHUFFLE_CATALOG_ID = "shuffle-shows"; // internal catalog id
+const SHUFFLE_ALL_POSTER = "https://files.catbox.moe/xwbu5e.jpg";     // "All" tile
+const SHUFFLE_ALL_BACKGROUND = "https://files.catbox.moe/sgidvf.jpg"; // "All" backdrop
 const SHUFFLE_EPISODE_COUNT = 20;           // episodes per visit
 const SHUFFLE_INCLUDE_SPECIALS = false;     // include Season 0?
 
@@ -296,17 +298,11 @@ async function handleShuffleCatalog(res, rawExtra) {
   });
 
   if (shows.length) {
-    const posters = showMetas
-      .filter(Boolean)
-      .map((m) => m.poster)
-      .filter(Boolean);
     metas.unshift({
       id: "shf~all",
       type: "series",
       name: "All",
-      poster: posters.length
-        ? posters[Math.floor(Math.random() * posters.length)]
-        : undefined,
+      poster: SHUFFLE_ALL_POSTER,
       posterShape: "poster",
       description:
         "Random episodes from every show in this row — reshuffles every visit.",
@@ -380,12 +376,7 @@ async function handleAllShuffleMeta(res) {
     if (!meta) return;
     const eps = shuffle(eligibleEpisodes(meta));
     if (eps.length) {
-      decks.push({
-        name: meta.name,
-        poster: meta.poster,
-        background: meta.background,
-        eps,
-      });
+      decks.push({ name: meta.name, eps });
     }
   });
   if (!decks.length) return sendJson(res, { meta: null });
@@ -411,7 +402,6 @@ async function handleAllShuffleMeta(res) {
     overview: p.v.overview || p.v.description,
   }));
 
-  const cover = decks[Math.floor(Math.random() * decks.length)];
   sendJson(
     res,
     {
@@ -419,8 +409,8 @@ async function handleAllShuffleMeta(res) {
         id: "shf~all",
         type: "series",
         name: "All · Shuffle",
-        poster: cover.poster,
-        background: cover.background,
+        poster: SHUFFLE_ALL_POSTER,
+        background: SHUFFLE_ALL_BACKGROUND || undefined,
         description: `${videos.length} random episodes drawn from all ${decks.length} of your shuffle shows. Back out and reopen to reshuffle. Turn on Auto-Play Next and let it run.`,
         videos,
       },
