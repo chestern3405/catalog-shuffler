@@ -435,36 +435,50 @@ function ghHeaders() {
 // { type, show: { ids: { imdb }, title, year } }; we keep the shows that
 // carry an IMDb id, since that's what the shuffle engine and BingeCat use.
 async function fetchTraktList() {
-  const res = await fetch(
-    `${TRAKT_API}/users/${encodeURIComponent(TRAKT_USER)}/lists/${encodeURIComponent(
-      TRAKT_LIST
-    )}/items/show`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": TRAKT_CLIENT_ID,
-        // Trakt rejects requests without a User-Agent (Node's fetch sends
-        // none by default), so set one explicitly.
-        "User-Agent": "catalog-shuffler-trakt",
-      },
-    }
-  );
-  if (res.status === 404) {
-    throw new Error("Trakt list not found (check TRAKT_USER / TRAKT_LIST, and that the list is public)");
-  }
-  if (!res.ok) throw new Error(`Trakt -> HTTP ${res.status}`);
-  const items = await res.json();
-  if (!Array.isArray(items)) throw new Error("Trakt -> unexpected response");
   const seen = new Set();
   const list = [];
-  for (const it of items) {
-    const show = it && it.show;
-    const imdb = show && show.ids && show.ids.imdb;
-    if (!imdb || !/^tt\d+$/.test(imdb) || seen.has(imdb)) continue;
-    seen.add(imdb);
-    list.push({ id: imdb, name: show.title || imdb });
-  }
+  const limit = 100;
+  let page = 1;
+  let pageCount = 1;
+
+  do {
+    const res = await fetch(
+      `${TRAKT_API}/users/${encodeURIComponent(TRAKT_USER)}/lists/${encodeURIComponent(
+        TRAKT_LIST
+      )}/items/show?page=${page}&limit=${limit}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "trakt-api-version": "2",
+          "trakt-api-key": TRAKT_CLIENT_ID,
+          // Trakt rejects requests without a User-Agent (Node's fetch sends
+          // none by default), so set one explicitly.
+          "User-Agent": "catalog-shuffler-trakt",
+        },
+      }
+    );
+    if (res.status === 404) {
+      throw new Error("Trakt list not found (check TRAKT_USER / TRAKT_LIST, and that the list is public)");
+    }
+    if (!res.ok) throw new Error(`Trakt -> HTTP ${res.status}`);
+
+    // Trakt reports total pages in a response header; default page size is
+    // small, so without paging we'd only see the first slice of the list.
+    const headerCount = Number(res.headers.get("x-pagination-page-count"));
+    if (Number.isFinite(headerCount) && headerCount > 0) pageCount = headerCount;
+
+    const items = await res.json();
+    if (!Array.isArray(items)) throw new Error("Trakt -> unexpected response");
+    for (const it of items) {
+      const show = it && it.show;
+      const imdb = show && show.ids && show.ids.imdb;
+      if (!imdb || !/^tt\d+$/.test(imdb) || seen.has(imdb)) continue;
+      seen.add(imdb);
+      list.push({ id: imdb, name: show.title || imdb });
+    }
+    page += 1;
+  } while (page <= pageCount && page <= 20); // hard stop at 2000 items
+
   return list;
 }
 
