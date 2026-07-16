@@ -61,7 +61,7 @@ const TRAKT_CLIENT_ID = process.env.TRAKT_CLIENT_ID || "";
 const TRAKT_USER = process.env.TRAKT_USER || "";
 const TRAKT_LIST = process.env.TRAKT_LIST || "";
 const TRAKT_API = "https://api.trakt.tv";
-const TRAKT_TTL_MS = 10 * 60 * 1000; // re-check the Trakt list every 10 min
+const TRAKT_TTL_MS = 1 * 60 * 1000; // re-check the Trakt list every 10 min
 
 const SHUFFLE_ROW_NAME = "🎲 Shuffle";      // home-screen row title
 const SHUFFLE_CATALOG_ID = "shuffle-shows"; // internal catalog id
