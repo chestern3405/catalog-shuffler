@@ -444,6 +444,9 @@ async function fetchTraktList() {
         "Content-Type": "application/json",
         "trakt-api-version": "2",
         "trakt-api-key": TRAKT_CLIENT_ID,
+        // Trakt rejects requests without a User-Agent (Node's fetch sends
+        // none by default), so set one explicitly.
+        "User-Agent": "catalog-shuffler-trakt",
       },
     }
   );
