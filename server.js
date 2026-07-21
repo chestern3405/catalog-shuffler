@@ -43,9 +43,9 @@ const CATALOG_EXCLUDE = [
   "below deck",
   "Competition",
   "Love Island",
-  "Netflix Reality",
-  "Other Reality",
-  "latest reality",
+ // "Netflix Reality",
+ // "Other Reality",
+ // "latest reality",
 ];
 
 // 4) Shuffle Shows — shows that get a "random episode" mode. Each one
