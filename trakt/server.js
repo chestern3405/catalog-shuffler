@@ -17,6 +17,7 @@
 const UPSTREAM_MANIFESTS = [
   "https://bingecat.com/stremio/fc240269-f369-43c4-ae76-1e95bfc480ee/nuvio/manifest.json?bcv=217",
   "https://aiometadata.viren070.me/stremio/5ec91dc1-27ba-4165-8d77-c42d9b77cd35/manifest.json",
+  "https://xperience-app.com/manifest/2adf7fcf-fa8f-409d-b2b4-4b566db50929/eyJhbGciOiJIUzI1NiJ9.eyJwaWQiOiIyYWRmN2ZjZi1mYThmLTQwOWQtYjJiNC00YjU2NmRiNTA5MjkiLCJraWQiOiI1MDUyODlkYS03OGMwLTRjNzktYjA1ZC1iNGM0Zjg4ZGRmYjgiLCJzY29wZSI6Im1hbmlmZXN0Iiwic3ViIjoiNDFlMGUwN2UtNzExNS00YTY5LWJlYTctOTdjYzAwNjAwNGMyIiwiaWF0IjoxNzg0NjQ0MTE5fQ.vYUp6RHXCwRIQUTy2gI7DFSs2_FUp9vGIpO5dAckE1c/manifest.json",
 ];
 
 const ADDON_ID = "org.chase.catalog-shuffler.trakt";
