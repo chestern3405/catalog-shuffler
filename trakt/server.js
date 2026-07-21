@@ -15,7 +15,7 @@
 
 // 1) Manifest URLs of the addons whose catalogs you want aggregated:
 const UPSTREAM_MANIFESTS = [
-  "https://bingecat.com/stremio/fc240269-f369-43c4-ae76-1e95bfc480ee/nuvio/manifest.json?bcv=78",
+  "https://bingecat.com/stremio/fc240269-f369-43c4-ae76-1e95bfc480ee/nuvio/manifest.json?bcv=217",
   "https://aiometadata.viren070.me/stremio/5ec91dc1-27ba-4165-8d77-c42d9b77cd35/manifest.json",
 ];
 
